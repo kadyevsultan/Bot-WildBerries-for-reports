@@ -69,13 +69,13 @@ async def cmd_addshop_api_key(message, state: FSMContext):
     
     shop_name = await get_shop_name(api_key)
     
-    if shop_name:
+    if shop_name == "Error":
+        await message.answer("Не удалось получить информацию о магазине. Проверьте правильность API-ключа и попробуйте снова.")
+        await state.clear()  
+    else:
         await state.update_data(api_key=api_key, shop_name=shop_name)
         await state.set_state(AddShop.shop_name)
         await message.answer(f"Магазин найден: {shop_name}\nХотите добавить его?", reply_markup=await add_shop_confirm_keyboard())
-    else:
-        await message.answer("Не удалось получить информацию о магазине. Проверьте правильность API-ключа и попробуйте снова.")
-        await state.clear()  
         
 @router.callback_query(F.data.startswith("shopadd_"), AddShop.shop_name)
 async def cmd_confirm_shop_name(callback_query: CallbackQuery, state: FSMContext):
@@ -91,11 +91,11 @@ async def cmd_confirm_shop_name(callback_query: CallbackQuery, state: FSMContext
         # Добавляем магазин в базу данных
         await db.add_shop(tg_id, api_key, shop_name)
 
-        await callback_query.message.answer(f"Магазин {shop_name} успешно добавлен.")
+        await callback_query.message.edit_text(f"Магазин {shop_name} успешно добавлен.")
         await state.clear()  # Завершаем процесс добавления магазина
 
     elif user_answer == "shopadd_cancel":
-        await callback_query.message.answer("Магазин не был добавлен. Вы можете попробовать снова с помощью команды /addshop.")
+        await callback_query.message.edit_text("Магазин не был добавлен. Вы можете попробовать снова с помощью команды /addshop.")
         await state.clear()  # Завершаем процесс добавления магазина
         
 
@@ -126,14 +126,14 @@ async def cmd_delshop_callback(callback_query: CallbackQuery):
     shop_name = data[len("shopdelete_"):]
     
     if data == 'shopdelete_cancel_delete':
-        await callback_query.answer("Удаление магазина отменено.")
+        await callback_query.message.edit_text("Удаление магазина отменено.")
         return 
     
     try:
         await db.del_shop(tg_id, shop_name)
-        await callback_query.answer(f"Магазин {data} успешно удален.")
+        await callback_query.message.edit_text(f"Магазин {shop_name} успешно удален.")
     except Exception as e:
-        await callback_query.answer(f"Произошла ошибка при удалении магазина: {e}")
+        await callback_query.message.edit_text(f"Произошла ошибка при удалении магазина: {e}")
     
     
 @router.message(Command("report"))
@@ -143,11 +143,11 @@ async def cmd_report(message, state: FSMContext):
         await message.answer("Список магазинов пока что пуст")
         return
     await state.set_state(Report.shop)
-    await message.answer("Помните, что отчеты могут занимать некоторое время!")
     await message.answer(
-        "Также обратите внимание, что API WB имеет ограничение по количеству запросов. "
-        "Не стоит отправлять запросы слишком часто, чтобы избежать блокировки. "
-        "Пожалуйста, подождите, если возникнут проблемы с запросом."
+        "Помните, что отчеты могут занимать некоторое время!\n"
+        "Также обратите внимание, что API WB имеет ограничение по количеству запросов.\n "
+        "Не стоит отправлять запросы слишком часто, чтобы избежать блокировки.\n "
+        "Пожалуйста, подождите, если возникнут проблемы с запросом.\n"
     )
     await message.answer("Выберите магазин для отчета:", reply_markup=await get_shops_for_report_keyboard(message.from_user.id))
     
@@ -158,16 +158,16 @@ async def cmd_report_callback(callback_query: CallbackQuery, state: FSMContext):
     shop_name = data[len("shopreport_"):]
     
     if data == 'shopreport_cancel_report':
-        await callback_query.message.answer("Отчет отменен.")
+        await callback_query.message.edit_text("Отчет отменен.")
         await state.clear()
         return 
     
     try:
         await state.update_data(shop=shop_name)
         await state.set_state(Report.date_from)
-        await callback_query.message.answer(f'Выберите дату для отчета:', reply_markup=await get_date_for_report_keyboard())
+        await callback_query.message.edit_text(f'Выберите дату для отчета:', reply_markup=await get_date_for_report_keyboard())
     except Exception as e:
-        await callback_query.message.answer(f"Произошла ошибка при отправке отчета: {e}")
+        await callback_query.message.edit_text(f"Произошла ошибка при отправке отчета: {e}")
         await state.clear()
         
 @router.callback_query(F.data.startswith("shopreport_date_"), Report.date_from)
@@ -177,7 +177,7 @@ async def cmd_report_date_callback(callback_query: CallbackQuery, state: FSMCont
     dateTo = ''
     
     if data == 'shopreport_date_cancel_report':
-        await callback_query.message.answer("Отчет отменен.")
+        await callback_query.message.edit_text("Отчет отменен.")
         await state.clear()
         return 
     
@@ -195,7 +195,7 @@ async def cmd_report_date_callback(callback_query: CallbackQuery, state: FSMCont
             dateTo = datetime.now().strftime("%Y-%m-%d")
             
         elif data == 'shopreport_date_custom':
-            await callback_query.message.answer(f'Для начала введите начальную дату отчета в формате ГГГГ-ММ-ДД(например: 2025-01-01)')
+            await callback_query.message.edit_text(f'Для начала введите начальную дату отчета в формате ГГГГ-ММ-ДД(например: 2025-01-01)')
             await state.set_state(Report.custom_date)
             return
             
@@ -203,10 +203,10 @@ async def cmd_report_date_callback(callback_query: CallbackQuery, state: FSMCont
         
         await state.set_state(Report.type_report)
         
-        await callback_query.message.answer(f'Выберите тип отчета:', reply_markup=await get_type_for_report_keyboard())
+        await callback_query.message.edit_text(f'Выберите тип отчета:', reply_markup=await get_type_for_report_keyboard())
         
     except Exception as e:
-        await callback_query.message.answer(f"Произошла ошибка при отправке отчета: {e}")
+        await callback_query.message.edit_text(f"Произошла ошибка при отправке отчета: {e}")
         await state.clear()
         
 
@@ -252,7 +252,7 @@ async def cmd_report_type_callback(callback_query: CallbackQuery, state: FSMCont
     api_key = await db.get_api_by_shop_name(session=async_session, shop_name=shop_name, tg_id=tg_id)
     
     if data == 'shopreport_type_cancel_report':
-        await callback_query.message.answer("Отчет отменен.")
+        await callback_query.message.edit_text("Отчет отменен.")
         await state.clear()
         return 
     
@@ -261,29 +261,39 @@ async def cmd_report_type_callback(callback_query: CallbackQuery, state: FSMCont
         await state.clear()
         if data == 'shopreport_type_sales_sum':
             result = await get_sales_sum(api_key=api_key, dateFrom=date_from, dateTo=date_to)
-            await callback_query.message.answer(result)
+            await callback_query.message.edit_text(result)
         elif data == 'shopreport_type_sales_count_products':
             result = await get_count_products_sold(api_key=api_key, dateFrom=date_from, dateTo=date_to)
-            await callback_query.message.answer(result)
+            await callback_query.message.edit_text(result)
         elif data == 'shopreport_type_avg_price':
             result = await get_average_price_for_product(api_key=api_key, dateFrom=date_from, dateTo=date_to)
-            await callback_query.message.answer(result)
+            await callback_query.message.edit_text(result)
         elif data == 'shopreport_type_wb_commission':
             result = await get_wb_commission(api_key=api_key, dateFrom=date_from, dateTo=date_to)
-            await callback_query.message.answer(result)
+            await callback_query.message.edit_text(result)
         elif data == 'shopreport_type_wb_discount':
             result = await get_discount_wb(api_key=api_key, dateFrom=date_from, dateTo=date_to)
-            await callback_query.message.answer(result)
+            await callback_query.message.edit_text(result)
         elif data == 'shopreport_type_acquiring_commission':
             result = await get_commission_acquiring(api_key=api_key, dateFrom=date_from, dateTo=date_to)
-            await callback_query.message.answer(result)
+            await callback_query.message.edit_text(result)
         elif data == 'shopreport_type_logistics_cost':
             result = await get_price_delivery(api_key=api_key, dateFrom=date_from, dateTo=date_to)
-            await callback_query.message.answer(result)
+            await callback_query.message.edit_text(result)
         elif data == 'shopreport_type_storage_cost':
             result = await get_price_storage(api_key=api_key, dateFrom=date_from, dateTo=date_to)
-            await callback_query.message.answer(result)
+            await callback_query.message.edit_text(result)
         
     except Exception as e:
-        await callback_query.message.answer(f"Произошла ошибка при отправке отчета: {e}")
+        await callback_query.message.edit_text(f"Произошла ошибка при отправке отчета: {e}")
         await state.clear()
+        
+        
+@router.message(F.text)
+async def cmd_unknown_text(message):
+    await message.answer("Пожалуйста, выберите команду из меню.")
+    
+    
+@router.message(F.text.startswith("/"))
+async def cmd_unknown_command(message):
+    await message.answer("Пожалуйста, выберите команду из меню.")

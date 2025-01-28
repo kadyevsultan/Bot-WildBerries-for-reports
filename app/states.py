@@ -29,7 +29,7 @@ async def get_shop_name(api_key):
             if response.status == 200:
                 return (await response.json())[0]["brand"]
             else:
-                return f"Ошибка получения информации о магазине: {response.status}"
+                return "Error"
     
 
 class Report(StatesGroup):
